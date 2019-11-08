@@ -2,6 +2,8 @@
 #Image being leverage as the base image to build Android apps against
 FROM quay.io/bitriseio/bitrise-base:latest
 
+MAINTAINER Tanck <softtanck@163.com>
+
 ENV ANDROID_HOME /opt/android-sdk-linux
 
 # ------------------------------------------------------
