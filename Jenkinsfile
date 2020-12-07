@@ -2,7 +2,7 @@
 
 //This JenkinsFile is based on a declarative format
 //https://jenkins.io/doc/book/pipeline/#declarative-versus-scripted-pipeline-syntax
-def CSD_DEPLOY_BRANCH = 'development'
+def DEPLOY_BRANCH = 'development'
 // Do not add the `def` for these fields
 XXPROJECT_ID = 974
 GITLAB_SERVER_URL = 'http://gitlab.com'// Or your server
@@ -30,7 +30,7 @@ pipeline {
                     notifySlack('STARTED')
                     echo "Setup Stage Starting. Depending on the Docker cache this may take a few " +
                             "seconds to a couple of minutes."
-                    echo "${env.BRANCH_NAME} is the branch.  Subsequent steps may not run on branches that are not ${CSD_DEPLOY_BRANCH}."
+                    echo "${env.BRANCH_NAME} is the branch.  Subsequent steps may not run on branches that are not ${DEPLOY_BRANCH}."
                     script {
                         cacheFileExist = sh(script: "[ -d ${GRADLE_CACHE} ]  && echo 'true' || echo 'false' ", returnStdout: true).trim()
                         echo 'Current cacheFile is exist : ' + cacheFileExist
@@ -60,7 +60,7 @@ pipeline {
                         echo "Building all types (debug, release, etc.) with lint checking"
                         getGitAuthor()
 
-                        if (env.BRANCH_NAME == CSD_DEPLOY_BRANCH) {
+                        if (env.BRANCH_NAME == DEPLOY_BRANCH) {
 
                             // TODO : Do some checks on your style
 
@@ -77,34 +77,14 @@ pipeline {
                     }
                 }
 
-                /* Comment out the inner cache rsync logic
-                gitlabCommitStatus(name: 'Sync Gradle Cache') {
-                    script {
-                        if (env.BRANCH_NAME != CSD_DEPLOY_BRANCH) {
-                            // TODO : The max cache file should be added.
-                            echo 'Write updates to the Gradle cache back to the host'
-                            // Write updates to the Gradle cache back to the host
-
-                            // -W, --whole-file:
-                            // With this option rsync's delta-transfer algorithm is not used and the whole file is sent as-is instead.
-                            // The transfer may be faster if this option is used when the bandwidth between the source and
-                            // destination machines is higher than the bandwidth to disk (especially when the lqdiskrq is actually a networked filesystem).
-                            // This is the default when both the source and destination are specified as local paths.
-                            sh "rsync -auW ${HOME}/.gradle/caches ${HOME}/.gradle/wrapper ${GRADLE_CACHE}/ || true"
-                        } else {
-                            echo 'Not on the Deploy branch , Skip write updates to the Gradle cache back to the host'
-                        }
-                    }
-                }*/
-
                 script {
                     // Only the development branch can be triggered
-                    if (env.BRANCH_NAME == CSD_DEPLOY_BRANCH) {
+                    if (env.BRANCH_NAME == DEPLOY_BRANCH) {
                         gitlabCommitStatus(name: 'Signature') {
                             // signing the apks with the platform key
                             signAndroidApks(
-                                    keyStoreId: "platform",
-                                    keyAlias: "platform",
+                                    keyStoreId: "XXX",
+                                    keyAlias: "XXX",
                                     apksToSign: "**/*.apk",
                                     archiveSignedApks: false,
                                     skipZipalign: true
@@ -121,11 +101,8 @@ pipeline {
 
                                 //Specific deployment to Production environment
                                 //echo "Deploying to Production environment"
-                                //sh './gradlew app:publish -DbuildType=proCN'
                             }
                         }
-                    } else {
-                        echo 'Current branch of the build not on the development branch, Skip the next steps!'
                     }
                 }
             }
@@ -140,7 +117,7 @@ pipeline {
                 success {
                     script {
                         // Only the development branch can be deleted these APKs.
-                        if (env.BRANCH_NAME == CSD_DEPLOY_BRANCH) {
+                        if (env.BRANCH_NAME == DEPLOY_BRANCH) {
                             cleanWs notFailBuild: true, patterns: [[pattern: '**/*.apk', type: 'INCLUDE']]
                         }
                     }
@@ -191,24 +168,4 @@ def getGitAuthor() {
     def commitSHA = sh(returnStdout: true, script: 'git rev-parse HEAD')
     author = sh(returnStdout: true, script: "git --no-pager show -s --format='%an' ${commitSHA}").trim()
     echo "Commit author: " + author
-}
-
-def notifySlack(String buildStatus = 'STARTED') {
-    // Build status of null means success.
-    buildStatus = buildStatus ?: 'SUCCESS'
-
-    def color
-    if (buildStatus == 'STARTED') {
-        color = '#D4DADF'
-    } else if (buildStatus == 'SUCCESS') {
-        color = 'good'
-    } else if (buildStatus == 'UNSTABLE' || buildStatus == 'CHANGED') {
-        color = 'warning'
-    } else {
-        color = 'danger'
-    }
-
-    def msg = "${buildStatus}: `${env.JOB_NAME}` #${env.BUILD_NUMBER}:\n${env.BUILD_URL}"
-
-    slackSend(color: color, message: msg)
 }
